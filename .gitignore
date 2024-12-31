@@ -1,2 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
 reddit/
-.idea
+.idea/
+
+# Configuration files
+*.env            # Ignore .env files with sensitive credentials
+*.env.*          # Ignore any variations like .env.production
+
+# Docker-related files
+*.swp            # Temporary swap files
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Python-specific files
+*.coverage       # Coverage reports
+.cache/          # pytest cache directory
+pytest_cache/    # Another pytest cache directory
+*.mypy_cache/    # mypy type checking cache
+.tox/            # tox virtualenvs
+
+# Kubernetes-related files
+.kubernetes/
+*.kubeconfig
+
+
+# Build artifacts
+dist/
+build/
+
+# Exclude sensitive outputs and archives
+*.key
+*.pem
+*.crt
+*.zip
+*.tar.gz

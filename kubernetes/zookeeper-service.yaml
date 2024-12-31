@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-service
+  labels:
+    app: zookeeper
+spec:
+  ports:
+  - port: 2181         # Zookeeper's default client port
+    targetPort: 2181   # The port exposed by the Zookeeper container
+  selector:
+    app: zookeeper     # Matches the labels in the Zookeeper deployment
+  type: ClusterIP      # Internal access within the Kubernetes cluster

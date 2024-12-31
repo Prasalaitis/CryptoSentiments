@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reddit-ingestion-config
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-broker:9092"
+  KAFKA_TOPICS: "reddit_data,dead_letter_queue"
+  KAFKA_GROUP_ID: "reddit-consumer-group"
+  REDDIT_CLIENT_ID: "your_reddit_client_id"
+  REDDIT_USER_AGENT: "your_user_agent"
