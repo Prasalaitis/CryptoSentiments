@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reddit-ingestion
+  labels:
+    app: reddit-ingestion
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reddit-ingestion
+  template:
+    metadata:
+      labels:
+        app: reddit-ingestion
+    spec:
+      containers:
+      - name: reddit-ingestion
+        image: reddit-ingestion:latest  # Replace with your container image
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: reddit-ingestion-config
+        - secretRef:
+            name: reddit-ingestion-secret
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

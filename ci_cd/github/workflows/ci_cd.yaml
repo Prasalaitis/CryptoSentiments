@@ -1,0 +1,106 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  # Trigger only on pushes to the main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]  # Define multiple Python versions for testing compatibility
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Dependencies
+      run: pip install --no-cache-dir -r requirements.txt
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Dependencies
+      run: pip install flake8
+
+    - name: Run Linting
+      run: flake8 .
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint  # Run tests after linting is successful
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run Tests
+      run: pytest --junitxml=results.xml
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: results.xml
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test  # Deploy only if tests are successful
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Kubernetes
+      env:
+        KUBECONFIG_JSON: ${{ secrets.KUBECONFIG_JSON }}
+        K8S_CLUSTER_URL: ${{ secrets.K8S_CLUSTER_URL }}
+        K8S_TOKEN: ${{ secrets.K8S_TOKEN }}
+      run: |
+        echo "${KUBECONFIG_JSON}" > kubeconfig.json
+        export KUBECONFIG=kubeconfig.json
+        kubectl config set-cluster my-cluster --server=${K8S_CLUSTER_URL}
+        kubectl config set-credentials ci-user --token=${K8S_TOKEN}
+        kubectl config set-context ci-context --cluster=my-cluster --user=ci-user
+        kubectl config use-context ci-context
+
+    - name: Deploy to Kubernetes
+      run: kubectl apply -f kubernetes/deployment.yaml
+
+    - name: Verify Deployment
+      run: kubectl rollout status deployment/meme-coin-radar

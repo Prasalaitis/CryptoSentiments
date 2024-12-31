@@ -9,8 +9,10 @@ reddit/
 .idea/
 
 # Configuration files
+.env
 *.env            # Ignore .env files with sensitive credentials
 *.env.*          # Ignore any variations like .env.production
+
 
 # Docker-related files
 *.swp            # Temporary swap files
@@ -30,6 +32,11 @@ pytest_cache/    # Another pytest cache directory
 # Kubernetes-related files
 .kubernetes/
 *.kubeconfig
+# Ignore dynamically generated Kubernetes files
+*.generated.yaml
+
+# Ignore sensitive secrets
+kubernetes/secret.yaml
 
 
 # Build artifacts
