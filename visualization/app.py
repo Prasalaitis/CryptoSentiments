@@ -1,120 +1,88 @@
 import streamlit as st
 import pandas as pd
-import logging
-import os
+import matplotlib.pyplot as plt
+import json
+from kafka import KafkaConsumer
+from ingestion.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPICS
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+class SentimentDashboard:
+    def __init__(self):
+        """
+        Initializes the dashboard with default configuration.
+        """
+        self.consumer_cache = {}
 
-# App title and description
-st.title("Meme Coin Radar")
-st.subheader("Track sentiment trends of meme coins in real-time!")
+    def get_kafka_consumer(self, topic):
+        """
+        Creates or retrieves a cached Kafka consumer for a given topic.
 
-# Environment variables for dynamic configuration
-DATA_SOURCE = os.getenv(
-    "DATA_SOURCE", "processed_data.csv"
-)  # Default to local CSV file
-DEFAULT_COLUMN = os.getenv(
-    "DEFAULT_COLUMN", "sentiment"
-)  # Default column to display
+        Args:
+            topic (str): The Kafka topic to consume messages from.
 
+        Returns:
+            KafkaConsumer: A Kafka consumer instance.
+        """
+        if topic not in self.consumer_cache:
+            self.consumer_cache[topic] = KafkaConsumer(
+                topic,
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                auto_offset_reset="latest",
+                value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+            )
+        return self.consumer_cache[topic]
 
-def load_data(source: str) -> pd.DataFrame:
-    """
-    Load data from the specified source.
+    def fetch_data(self, consumer, max_messages=100):
+        """
+        Fetches data from a Kafka topic.
 
-    Args:
-        source (str): Path to the data file or data source.
+        Args:
+            consumer (KafkaConsumer): The Kafka consumer instance.
+            max_messages (int): The maximum number of messages to fetch.
 
-    Returns:
-        pd.DataFrame: Loaded data as a pandas DataFrame.
-    """
-    try:
-        if source.startswith("s3://"):
-            import boto3
-            from io import StringIO
+        Returns:
+            pd.DataFrame: A DataFrame containing the messages.
+        """
+        data = []
+        for message in consumer:
+            data.append(message.value)
+            if len(data) >= max_messages:
+                break
+        return pd.DataFrame(data)
 
-            # Parse S3 details
-            bucket, key = source.replace("s3://", "").split("/", 1)
-            s3 = boto3.client("s3")
-            obj = s3.get_object(Bucket=bucket, Key=key)
-            df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
+    def show_sentiment_trends(self, data):
+        """
+        Displays a sentiment trends chart.
+
+        Args:
+            data (pd.DataFrame): DataFrame containing the sentiment data.
+        """
+        st.subheader("Sentiment Trends")
+        if "sentiment" in data.columns and "created_utc" in data.columns:
+            fig, ax = plt.subplots()
+            data["created_utc"] = pd.to_datetime(data["created_utc"], unit="s")
+            data.sort_values("created_utc", inplace=True)
+            ax.plot(data["created_utc"], data["sentiment"], marker="o")
+            ax.set_title("Sentiment Trends Over Time")
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Sentiment")
+            st.pyplot(fig)
         else:
-            df = pd.read_csv(source)
-        logging.info("Data loaded successfully from %s", source)
-        return df
-    except Exception as e:
-        logging.error("Failed to load data: %s", e)
-        st.error(f"An error occurred while loading the data: {e}")
-        return pd.DataFrame()
+            st.warning("No sentiment data available to plot.")
 
+    def run(self):
+        """
+        Runs the Streamlit dashboard.
+        """
+        st.title("Cryptocurrency Sentiment Dashboard")
 
-def validate_data(df: pd.DataFrame) -> bool:
-    """
-    Validate the structure of the loaded DataFrame.
+        # Select Kafka Topic
+        topic = st.selectbox("Select Kafka Topic", list(KAFKA_TOPICS.values()))
+        consumer = self.get_kafka_consumer(topic)
 
-    Args:
-        df (pd.DataFrame): DataFrame to validate.
+        # Fetch and Display Data
+        data = self.fetch_data(consumer, max_messages=500)
+        st.write(f"Showing {len(data)} messages from topic '{topic}'")
+        st.dataframe(data)
 
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    required_columns = [
-        "sentiment",
-        "timestamp",
-    ]  # Adjust based on your dataset
-    if df.empty:
-        st.error("The loaded dataset is empty.")
-        return False
-    missing_columns = [
-        col for col in required_columns if col not in df.columns
-    ]
-    if missing_columns:
-        st.error(f"Missing required columns: {', '.join(missing_columns)}")
-        return False
-    return True
-
-
-def main():
-    # Load data
-    data = load_data(DATA_SOURCE)
-
-    # Validate data
-    if not validate_data(data):
-        return
-
-    # Display a preview of the data
-    st.write("Here's a preview of the dataset:")
-    st.dataframe(data.head())
-
-    # Allow users to select the column to visualize
-    st.write("Select a column to visualize its trend:")
-    columns = data.columns.tolist()
-    default_index = (
-        columns.index(DEFAULT_COLUMN) if DEFAULT_COLUMN in columns else 0
-    )
-    selected_column = st.selectbox(
-        "Choose a column", columns, index=default_index
-    )
-
-    # Allow users to filter by date range
-    st.write("Filter data by date range:")
-    min_date, max_date = pd.to_datetime(
-        data["timestamp"].min()
-    ), pd.to_datetime(data["timestamp"].max())
-    date_range = st.date_input("Select date range", [min_date, max_date])
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-        data = data[
-            (pd.to_datetime(data["timestamp"]) >= pd.to_datetime(start_date))
-            & (pd.to_datetime(data["timestamp"]) <= pd.to_datetime(end_date))
-        ]
-
-    # Display the line chart for the selected column
-    st.line_chart(data[selected_column])
-
-
-if __name__ == "__main__":
-    main()
+        # Show Sentiment Trends
+        self.show_sentiment_trends(data)
