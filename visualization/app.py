@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import json
+import time
 from kafka import KafkaConsumer
 from ingestion.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPICS
 
@@ -69,9 +70,12 @@ class SentimentDashboard:
         else:
             st.warning("No sentiment data available to plot.")
 
-    def run(self):
+    def run(self, refresh_interval=5):
         """
-        Runs the Streamlit dashboard.
+        Runs the Streamlit dashboard with auto-refresh.
+
+        Args:
+            refresh_interval (int): The time interval (in seconds) for refreshing the dashboard.
         """
         st.title("Cryptocurrency Sentiment Dashboard")
 
@@ -79,10 +83,17 @@ class SentimentDashboard:
         topic = st.selectbox("Select Kafka Topic", list(KAFKA_TOPICS.values()))
         consumer = self.get_kafka_consumer(topic)
 
-        # Fetch and Display Data
-        data = self.fetch_data(consumer, max_messages=500)
-        st.write(f"Showing {len(data)} messages from topic '{topic}'")
-        st.dataframe(data)
+        # Auto-refresh functionality
+        while True:
+            st.write(f"Fetching data from topic: '{topic}'")
+            with st.spinner("Fetching data..."):
+                data = self.fetch_data(consumer, max_messages=500)
+                st.write(f"Showing {len(data)} messages from topic '{topic}'")
+                st.dataframe(data)
 
-        # Show Sentiment Trends
-        self.show_sentiment_trends(data)
+                # Show Sentiment Trends
+                self.show_sentiment_trends(data)
+
+            # Wait for the refresh interval
+            time.sleep(refresh_interval)
+            st.experimental_rerun()
