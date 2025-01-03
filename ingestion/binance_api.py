@@ -64,5 +64,6 @@ if __name__ == "__main__":
     symbols = fetch_binance_coins()
     if symbols:
         print(f"Fetched {len(symbols)} symbols.")
+        print("First 10 symbols:", symbols[:10])
     else:
         print("Failed to fetch symbols.")
