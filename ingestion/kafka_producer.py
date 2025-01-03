@@ -1,14 +1,18 @@
 import json
 from kafka import KafkaProducer
 from ingestion.logger import logger
-from ingestion.config import KAFKA_BOOTSTRAP_SERVERS
+from ingestion.config import KafkaConfig
+
 
 class KafkaProducerManager:
+    """
+    A class to manage Kafka producer operations.
+    """
+
     def __init__(self):
         """
         Initializes the KafkaProducerManager and creates a Kafka producer instance.
         """
-        self.bootstrap_servers = KAFKA_BOOTSTRAP_SERVERS
         self.producer = self._create_producer()
 
     def _create_producer(self):
@@ -17,7 +21,7 @@ class KafkaProducerManager:
         """
         try:
             producer = KafkaProducer(
-                bootstrap_servers=self.bootstrap_servers,
+                bootstrap_servers=KafkaConfig.BOOTSTRAP_SERVERS,
                 value_serializer=lambda x: json.dumps(x).encode("utf-8"),
                 retries=5,
             )
@@ -27,14 +31,18 @@ class KafkaProducerManager:
             logger.error("Failed to create Kafka producer: %s", e)
             raise
 
-    def send_message(self, topic, message):
+    def send_message(self, topic_key, message):
         """
         Sends a message to a Kafka topic.
 
         Args:
-            topic (str): The Kafka topic to send the message to.
+            topic_key (str): The key for the Kafka topic in KafkaConfig.TOPICS.
             message (dict): The message to send.
         """
+        if topic_key not in KafkaConfig.TOPICS:
+            raise ValueError(f"Topic '{topic_key}' not found in KafkaConfig.TOPICS")
+
+        topic = KafkaConfig.TOPICS[topic_key]
         try:
             self.producer.send(topic, value=message).get(timeout=10)
             logger.info("Message sent to topic '%s': %s", topic, message)
