@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import json
 import time
 from kafka import KafkaConsumer
-from ingestion.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPICS
+from ingestion import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPICS
 
 class SentimentDashboard:
     def __init__(self):
