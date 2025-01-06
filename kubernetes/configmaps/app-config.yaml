@@ -3,8 +3,8 @@ kind: ConfigMap
 metadata:
   name: reddit-ingestion-config
 data:
-  KAFKA_BOOTSTRAP_SERVERS: "deployments-broker:9092"
-  KAFKA_TOPICS: "reddit_data,dead_letter_queue"
-  KAFKA_GROUP_ID: "reddit-consumer-group"
-  REDDIT_CLIENT_ID: "your_reddit_client_id"
-  REDDIT_USER_AGENT: "your_user_agent"
+  AWS_REGION: "eu-north-1"                      # Specify the AWS region
+  KAFKA_BOOTSTRAP_SERVERS: "deployments-broker:9092" # Kafka broker address
+  KAFKA_TOPICS: "reddit_data,dead_letter_queue"      # Kafka topics
+  KAFKA_GROUP_ID: "reddit-consumer-group"           # Consumer group for Kafka
+  REDDIT_USER_AGENT: "my-reddit-app/1.0"            # User agent for Reddit API

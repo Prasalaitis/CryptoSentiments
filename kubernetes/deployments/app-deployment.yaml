@@ -16,14 +16,60 @@ spec:
     spec:
       containers:
       - name: reddit-ingestion
-        image: reddit-ingestion:latest  # Replace with your container image
+        image: <your-ecr-repository>/reddit-ingestion:v1.0.0
         ports:
         - containerPort: 8000
-        envFrom:
-        - configMapRef:
-            name: reddit-ingestion-config
-        - secretRef:
-            name: reddit-ingestion-secret
+        env:
+        # Reference values from ConfigMap
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: reddit-ingestion-config
+              key: AWS_REGION
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: reddit-ingestion-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: KAFKA_TOPICS
+          valueFrom:
+            configMapKeyRef:
+              name: reddit-ingestion-config
+              key: KAFKA_TOPICS
+        - name: KAFKA_GROUP_ID
+          valueFrom:
+            configMapKeyRef:
+              name: reddit-ingestion-config
+              key: KAFKA_GROUP_ID
+        - name: REDDIT_USER_AGENT
+          valueFrom:
+            configMapKeyRef:
+              name: reddit-ingestion-config
+              key: REDDIT_USER_AGENT
+
+        # Reference sensitive values from Secret
+        - name: REDDIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: reddit-ingestion-secret
+              key: REDDIT_CLIENT_ID
+        - name: REDDIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: reddit-ingestion-secret
+              key: REDDIT_CLIENT_SECRET
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: reddit-ingestion-secret
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: reddit-ingestion-secret
+              key: AWS_SECRET_ACCESS_KEY
+
+        # Health probes
         livenessProbe:
           httpGet:
             path: /healthz
@@ -36,6 +82,8 @@ spec:
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
+
+        # Resource requests and limits
         resources:
           requests:
             memory: "256Mi"
