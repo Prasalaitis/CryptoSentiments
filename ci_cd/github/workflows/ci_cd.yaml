@@ -100,7 +100,7 @@ jobs:
         kubectl config use-context ci-context
 
     - name: Deploy to Kubernetes
-      run: kubectl apply -f kubernetes/deployment.yaml
+      run: kubectl apply -f kubernetes/app-deployment.yaml
 
     - name: Verify Deployment
       run: kubectl rollout status deployment/meme-coin-radar

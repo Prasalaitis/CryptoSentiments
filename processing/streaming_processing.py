@@ -49,8 +49,8 @@ def main():
         # Read data from Kafka
         logging.info("Reading data from Kafka topic: %s", kafka_topic)
         df = (
-            spark.readStream.format("kafka")
-            .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
+            spark.readStream.format("deployments")
+            .option("deployments.bootstrap.servers", kafka_bootstrap_servers)
             .option("subscribe", kafka_topic)
             .option("startingOffsets", "latest")
             .load()
