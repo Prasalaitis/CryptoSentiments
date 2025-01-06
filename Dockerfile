@@ -1,5 +1,5 @@
 # Use a specific lightweight Python base image
-FROM python:3.9.15-slim
+FROM python:3.11.5-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
