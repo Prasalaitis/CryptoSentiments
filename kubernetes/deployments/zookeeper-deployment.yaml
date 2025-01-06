@@ -5,7 +5,7 @@ metadata:
   labels:
     app: zookeeper
 spec:
-  replicas: 1
+  replicas: 1  # Set to 1; for HA, consider StatefulSets
   selector:
     matchLabels:
       app: zookeeper
@@ -16,6 +16,33 @@ spec:
     spec:
       containers:
       - name: zookeeper
-        image: bitnami/zookeeper:latest
+        image: bitnami/zookeeper:latest  # Using a reliable Zookeeper image
         ports:
-        - containerPort: 2181
+        - containerPort: 2181           # Zookeeper's default client port
+        env:
+        - name: ALLOW_ANONYMOUS_LOGIN   # Example environment variable
+          value: "yes"
+        volumeMounts:
+        - name: zookeeper-storage
+          mountPath: /bitnami/zookeeper # Mount the PVC for persistent storage
+        livenessProbe:
+          tcpSocket:
+            port: 2181
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          tcpSocket:
+            port: 2181
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:                      # Define resource requests and limits
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: zookeeper-storage
+        persistentVolumeClaim:
+          claimName: zookeeper-pvc       # Reference the PVC defined in `zookeeper-volume.yaml`
