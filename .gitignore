@@ -38,6 +38,7 @@ pytest_cache/    # Another pytest cache directory
 
 # Ignore sensitive secrets
 kubernetes/secret.yaml
+kubernetes/configmaps/app-config.yaml
 
 
 # Build artifacts
