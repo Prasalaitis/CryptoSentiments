@@ -7,6 +7,7 @@ __pycache__/
 # Virtual environment
 reddit/
 .idea/
+crypto/
 
 # Configuration files
 .env
