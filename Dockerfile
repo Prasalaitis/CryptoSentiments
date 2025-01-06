@@ -1,14 +1,18 @@
-# Use a lightweight Python base image
-FROM python:3.9-slim
+# Use a specific lightweight Python base image
+FROM python:3.9.15-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1     # Prevent Python from writing .pyc files
-ENV PYTHONUNBUFFERED=1            # Ensure stdout and stderr are flushed immediately
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set working directory inside the container
 WORKDIR /app
 
-# Copy only requirements first (to leverage Docker caching for dependencies)
+# Add build-time argument for environment
+ARG ENV=production
+ENV ENV=${ENV}
+
+# Copy only requirements first (to leverage Docker caching)
 COPY requirements.txt /app/
 
 # Install Python dependencies
@@ -22,8 +26,12 @@ COPY . /app/
 RUN useradd --create-home appuser
 USER appuser
 
-# Expose the port the application listens on (if applicable)
+# Expose the port the application listens on
 EXPOSE 8000
+
+# Add a health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
+  CMD curl --fail http://localhost:8000/healthz || exit 1
 
 # Default command to run the application
 CMD ["python", "reddit_ingestion.py"]
