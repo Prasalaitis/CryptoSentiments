@@ -41,6 +41,10 @@ kubernetes/secret.yaml
 kubernetes/configmaps/app-config.yaml
 kubernetes/
 
+Binance files
+tests/test_binance_api.py
+ingestion/binance_api.py
+
 
 # Build artifacts
 dist/

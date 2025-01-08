@@ -2,12 +2,14 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
 from ingestion.config import KafkaConfig
 from ingestion.logger import logger
+from typing import List
 
 
 class KafkaTopicManager:
     """
-    A class to manage Kafka topics, including creation and validation.
+    Manages Kafka topics, including creation and validation.
     """
+
     def __init__(self):
         """
         Initializes the KafkaTopicManager with Kafka Admin Client.
@@ -22,33 +24,33 @@ class KafkaTopicManager:
             logger.error("Failed to initialize Kafka Admin Client: %s", e)
             raise
 
-    def list_existing_topics(self):
+    def list_existing_topics(self) -> List[str]:
         """
         Retrieves the list of existing Kafka topics.
 
         Returns:
-            set: A set of existing Kafka topic names.
+            List[str]: A list of existing Kafka topic names.
         """
         try:
-            existing_topics = set(self.admin_client.list_topics())
+            existing_topics = list(self.admin_client.list_topics())
             logger.info("Existing topics: %s", existing_topics)
             return existing_topics
         except KafkaError as e:
             logger.error("Failed to fetch existing topics: %s", e)
             raise
 
-    def create_topics(self, topics):
+    def create_topics(self, topics: List[str]) -> List[str]:
         """
         Creates Kafka topics if they don't already exist.
 
         Args:
-            topics (list): List of topic names to create.
+            topics (List[str]): List of topic names to create.
 
         Returns:
-            list: List of newly created topics.
+            List[str]: List of newly created topics.
         """
         try:
-            existing_topics = self.list_existing_topics()
+            existing_topics = set(self.list_existing_topics())
             new_topics = [
                 NewTopic(
                     name=topic,
@@ -60,11 +62,13 @@ class KafkaTopicManager:
 
             if new_topics:
                 self.admin_client.create_topics(new_topics=new_topics, validate_only=False)
-                logger.info("Created topics: %s", [topic.name for topic in new_topics])
-                return [topic.name for topic in new_topics]
-            else:
-                logger.info("No new topics to create. All topics already exist.")
-                return []
+                created_topics = [topic.name for topic in new_topics]
+                logger.info("Created topics: %s", created_topics)
+                return created_topics
+
+            logger.info("No new topics to create. All topics already exist.")
+            return []
+
         except TopicAlreadyExistsError as e:
             logger.warning("Some topics already exist: %s", e)
             return []
@@ -75,7 +79,7 @@ class KafkaTopicManager:
             logger.error("Unexpected error during topic creation: %s", e)
             raise
 
-    def close(self):
+    def close(self) -> None:
         """
         Closes the Kafka Admin Client.
         """
@@ -85,15 +89,17 @@ class KafkaTopicManager:
 
 
 if __name__ == "__main__":
-    # Initialize the KafkaTopicManager
     topic_manager = KafkaTopicManager()
+
     try:
-        # Extract topic names from config and create them
-        new_topics = topic_manager.create_topics(list(KafkaConfig.TOPICS.values()))
+        topics_to_create = list(KafkaConfig.TOPICS.values())
+        new_topics = topic_manager.create_topics(topics_to_create)
+
         if new_topics:
             logger.info("Successfully created topics: %s", new_topics)
         else:
-            logger.info("No topics were created.")
+            logger.info("No new topics were created.")
+    except Exception as e:
+        logger.error("Error in Kafka topic management: %s", e)
     finally:
-        # Ensure the Kafka Admin Client is closed
         topic_manager.close()

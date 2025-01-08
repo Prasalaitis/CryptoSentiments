@@ -1,26 +1,40 @@
 import json
 from kafka import KafkaConsumer
 from ingestion.logger import logger
-from ingestion.config import KafkaConfig  # Import the KafkaConfig class
+from ingestion.config import KafkaConfig
 from ingestion.dlq_handler import send_to_dlq
+from typing import Callable, Dict
 
 
 class KafkaConsumerManager:
-    def __init__(self, topic_key):
+    """
+    Manages Kafka consumer operations, including message processing and error handling.
+    """
+
+    def __init__(self, topic_key: str, message_handler: Callable[[Dict], None]):
         """
-        Initializes the KafkaConsumerManager and creates a Kafka consumer instance for the given topic.
+        Initializes the KafkaConsumerManager and creates a Kafka consumer instance.
 
         Args:
             topic_key (str): The key for the Kafka topic in KafkaConfig.TOPICS.
+            message_handler (Callable[[Dict], None]): Function to handle incoming messages.
+
+        Raises:
+            ValueError: If the topic key is invalid.
         """
         if topic_key not in KafkaConfig.TOPICS:
             raise ValueError(f"Topic '{topic_key}' not found in KafkaConfig.TOPICS")
+
         self.topic = KafkaConfig.TOPICS[topic_key]
         self.consumer = self._create_consumer()
+        self.message_handler = message_handler
 
-    def _create_consumer(self):
+    def _create_consumer(self) -> KafkaConsumer:
         """
         Creates and returns a Kafka consumer instance.
+
+        Returns:
+            KafkaConsumer: The Kafka consumer instance.
         """
         try:
             consumer = KafkaConsumer(
@@ -37,33 +51,18 @@ class KafkaConsumerManager:
             logger.error("Failed to create Kafka consumer: %s", e)
             raise
 
-    def process_message(self, message, producer):
+    def consume_messages(self):
         """
-        Processes a single Kafka message.
-
-        Args:
-            message (dict): The Kafka message to process.
-            producer: Kafka producer instance for sending messages to the DLQ.
-        """
-        try:
-            if "error" in message:
-                raise ValueError("Processing error!")
-            logger.info("Message processed successfully: %s", message)
-        except Exception as e:
-            logger.error("Message processing failed: %s", e)
-            send_to_dlq(producer, KafkaConfig.DLQ_TOPIC, message)
-
-    def consume_messages(self, producer):
-        """
-        Consumes messages from the Kafka topic and processes them.
-
-        Args:
-            producer: Kafka producer instance for sending messages to the DLQ.
+        Consumes messages from the Kafka topic and processes them using the provided message handler.
         """
         try:
             for message in self.consumer:
                 logger.info("Message received: %s", message.value)
-                self.process_message(message.value, producer)
+                try:
+                    self.message_handler(message.value)
+                except Exception as e:
+                    logger.error("Message processing failed: %s", e)
+                    send_to_dlq(KafkaProducerManager(), KafkaConfig.TOPICS["dlq"], message.value)
         except Exception as e:
             logger.error("Error while consuming messages: %s", e)
             raise
@@ -75,3 +74,18 @@ class KafkaConsumerManager:
         if self.consumer:
             self.consumer.close()
             logger.info("Kafka consumer closed.")
+
+
+if __name__ == "__main__":
+    # Example message handler
+    def example_handler(message: Dict):
+        logger.info("Processing message: %s", message)
+
+    consumer_manager = KafkaConsumerManager(topic_key="main", message_handler=example_handler)
+
+    try:
+        consumer_manager.consume_messages()
+    except KeyboardInterrupt:
+        logger.info("Consumer interrupted by user.")
+    finally:
+        consumer_manager.close()

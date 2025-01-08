@@ -8,6 +8,7 @@ from time import sleep
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
 
 # API configuration
 BINANCE_API_URL = os.getenv(
@@ -27,7 +28,7 @@ def fetch_binance_coins() -> List[str]:
     retries = 0
     while retries < MAX_RETRIES:
         try:
-            logging.info(
+            logger.info(
                 "Fetching Binance trading symbols from %s...", BINANCE_API_URL
             )
             response = requests.get(BINANCE_API_URL, timeout=10)
@@ -37,33 +38,41 @@ def fetch_binance_coins() -> List[str]:
             data = response.json()
             symbols = [item["symbol"] for item in data.get("symbols", [])]
 
-            logging.info("Successfully fetched %d symbols.", len(symbols))
+            if not symbols:
+                logger.warning("No symbols found in the response.")
+                return []
+
+            logger.info("Successfully fetched %d symbols.", len(symbols))
             return symbols
+
+        except requests.exceptions.Timeout:
+            logger.error("Request timed out. Retrying...")
         except requests.exceptions.RequestException as e:
-            retries += 1
-            logging.error(
-                "Error fetching Binance symbols (attempt %d/%d): %s",
-                retries,
-                MAX_RETRIES,
-                e,
-            )
-            if retries < MAX_RETRIES:
-                logging.info("Retrying in %d seconds...", RETRY_DELAY)
-                sleep(RETRY_DELAY)
+            logger.error("Request failed: %s", e)
         except KeyError as e:
-            logging.error("Unexpected response format: missing key %s", e)
+            logger.error("Unexpected response format: missing key %s", e)
             break
 
-    logging.error(
+        retries += 1
+        if retries < MAX_RETRIES:
+            logger.info("Retrying in %d seconds...", RETRY_DELAY)
+            sleep(RETRY_DELAY)
+
+    logger.error(
         "Failed to fetch Binance symbols after %d attempts.", MAX_RETRIES
     )
     return []
 
 
-if __name__ == "__main__":
+def main():
+    """Main function to fetch and display Binance trading symbols."""
     symbols = fetch_binance_coins()
     if symbols:
         print(f"Fetched {len(symbols)} symbols.")
         print("First 10 symbols:", symbols[:10])
     else:
         print("Failed to fetch symbols.")
+
+
+if __name__ == "__main__":
+    main()
