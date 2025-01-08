@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+    ports:
+      - "9092:9092"
+
+  app:
+    image: your-docker-username/reddit-ingestion-app:latest
+    container_name: reddit-ingestion-app
+    depends_on:
+      - kafka
+    environment:
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_MAIN_TOPIC=cryptocurrency_events
+      - KAFKA_DLQ_TOPIC=dead_letter_queue
+    ports:
+      - "8501:8501"
