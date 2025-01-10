@@ -1,9 +1,8 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, udf, from_json
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType
-import logging
 import os
-from ingestion.dlq_handler import send_to_dlq
+import logging
 
 # Configure logging
 logging.basicConfig(
@@ -12,11 +11,6 @@ logging.basicConfig(
 
 # Placeholder sentiment analysis function
 def analyze_sentiment(text: str) -> str:
-    """
-    Analyze the sentiment of a given text.
-    Replace this placeholder with an actual sentiment analysis model.
-    """
-    # Example logic: Replace with actual NLP model integration
     if "good" in text.lower():
         return "positive"
     elif "bad" in text.lower():
@@ -29,13 +23,12 @@ analyze_sentiment_udf = udf(analyze_sentiment, StringType())
 
 def main():
     # Load configurations
-    kafka_bootstrap_servers = os.getenv(
-        "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
-    )
+    kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     kafka_topic = os.getenv("KAFKA_TOPIC", "cryptocurrency_events")
     output_topic = os.getenv("OUTPUT_TOPIC", "sentiment_analysis_results")
+    s3_raw_data_path = os.getenv("S3_RAW_DATA_PATH", "s3a://your-bucket-name/raw-data/")
 
-    # Define the schema for incoming data
+    # Define schema for incoming data
     schema = StructType([
         StructField("id", StringType(), True),
         StructField("subreddit", StringType(), True),
@@ -45,47 +38,58 @@ def main():
     ])
 
     # Initialize Spark session
-    spark = SparkSession.builder.appName("RedditStreamProcessor").getOrCreate()
+    spark = SparkSession.builder \
+        .appName("RedditStreamProcessor") \
+        .config("spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID")) \
+        .config("spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY")) \
+        .config("spark.hadoop.fs.s3a.endpoint", "s3.amazonaws.com") \
+        .getOrCreate()
 
     try:
-        # Read data from Kafka
+        # Read raw data from Kafka
         logging.info("Reading data from Kafka topic: %s", kafka_topic)
-        df = (
-            spark.readStream.format("kafka")
-            .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
-            .option("subscribe", kafka_topic)
-            .option("startingOffsets", "latest")
+        raw_df = spark.readStream.format("kafka") \
+            .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+            .option("subscribe", kafka_topic) \
+            .option("startingOffsets", "latest") \
             .load()
-        )
 
         # Deserialize and apply schema
-        df = df.selectExpr("CAST(value AS STRING) as json")
-        parsed_df = df.select(from_json(col("json"), schema).alias("data")).select("data.*")
+        raw_parsed_df = raw_df.selectExpr("CAST(value AS STRING) as json") \
+            .select(from_json(col("json"), schema).alias("data")) \
+            .select("data.*")
 
-        # Add sentiment analysis column
-        processed_df = parsed_df.withColumn(
+        # Save raw data to S3
+        logging.info("Writing raw data to S3: %s", s3_raw_data_path)
+        raw_query = raw_parsed_df.writeStream \
+            .format("json") \
+            .option("path", s3_raw_data_path) \
+            .option("checkpointLocation", "s3a://your-bucket-name/checkpoints/raw-data/") \
+            .outputMode("append") \
+            .start()
+
+        # Process data with sentiment analysis
+        processed_df = raw_parsed_df.withColumn(
             "sentiment", analyze_sentiment_udf(col("body"))
         )
 
-        # Write the processed stream back to Kafka
-        logging.info("Writing the processed stream to Kafka topic: %s", output_topic)
-        query = (
-            processed_df.selectExpr("to_json(struct(*)) AS value")
-            .writeStream
-            .format("kafka")
-            .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
-            .option("topic", output_topic)
-            .outputMode("append")
+        # Write processed data to Kafka
+        logging.info("Writing processed data to Kafka topic: %s", output_topic)
+        processed_query = processed_df.selectExpr("to_json(struct(*)) AS value") \
+            .writeStream \
+            .format("kafka") \
+            .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
+            .option("topic", output_topic) \
+            .outputMode("append") \
             .start()
-        )
 
         # Await termination
-        query.awaitTermination()
+        raw_query.awaitTermination()
+        processed_query.awaitTermination()
 
     except Exception as e:
         logging.error("An error occurred: %s", e)
     finally:
-        # Stop the Spark session gracefully
         logging.info("Stopping Spark session...")
         spark.stop()
 
