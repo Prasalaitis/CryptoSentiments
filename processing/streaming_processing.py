@@ -21,12 +21,35 @@ def analyze_sentiment(text: str) -> str:
 # Register the UDF for sentiment analysis
 analyze_sentiment_udf = udf(analyze_sentiment, StringType())
 
+def write_to_snowflake(processed_df):
+    # Snowflake connection options
+    snowflake_options = {
+        "sfURL": os.getenv("SNOWFLAKE_ACCOUNT") + ".snowflakecomputing.com",
+        "sfDatabase": os.getenv("SNOWFLAKE_DATABASE"),
+        "sfSchema": os.getenv("SNOWFLAKE_SCHEMA"),
+        "sfWarehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
+        "sfRole": os.getenv("SNOWFLAKE_ROLE"),
+        "sfUser": os.getenv("SNOWFLAKE_USER"),
+        "sfPassword": os.getenv("SNOWFLAKE_PASSWORD"),
+    }
+
+    logging.info("Writing processed data to Snowflake...")
+
+    # Write processed data to Snowflake
+    processed_df.writeStream \
+        .format("net.snowflake.spark.snowflake") \
+        .options(**snowflake_options) \
+        .option("dbtable", "sentiment_analysis_results") \
+        .outputMode("append") \
+        .start()
+
 def main():
     # Load configurations
     kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     kafka_topic = os.getenv("KAFKA_TOPIC", "cryptocurrency_events")
     output_topic = os.getenv("OUTPUT_TOPIC", "sentiment_analysis_results")
     s3_raw_data_path = os.getenv("S3_RAW_DATA_PATH", "s3a://your-bucket-name/raw-data/")
+    checkpoint_location = os.getenv("CHECKPOINT_LOCATION", "s3a://your-bucket-name/checkpoints/")
 
     # Define schema for incoming data
     schema = StructType([
@@ -64,7 +87,7 @@ def main():
         raw_query = raw_parsed_df.writeStream \
             .format("json") \
             .option("path", s3_raw_data_path) \
-            .option("checkpointLocation", "s3a://your-bucket-name/checkpoints/raw-data/") \
+            .option("checkpointLocation", os.path.join(checkpoint_location, "raw-data")) \
             .outputMode("append") \
             .start()
 
@@ -80,8 +103,12 @@ def main():
             .format("kafka") \
             .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
             .option("topic", output_topic) \
+            .option("checkpointLocation", os.path.join(checkpoint_location, "processed-data")) \
             .outputMode("append") \
             .start()
+
+        # Write processed data to Snowflake
+        write_to_snowflake(processed_df)
 
         # Await termination
         raw_query.awaitTermination()
