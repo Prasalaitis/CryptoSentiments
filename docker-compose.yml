@@ -25,6 +25,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "9092:9092"
     volumes:
@@ -50,8 +51,8 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_MAIN_TOPIC=cryptocurrency_events
       - KAFKA_DLQ_TOPIC=dead_letter_queue
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+#      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+#      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     ports:
       - "8501:8501"
     restart: always
