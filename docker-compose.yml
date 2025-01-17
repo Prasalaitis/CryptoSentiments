@@ -12,9 +12,8 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: /ecs/zookeeper
-        awslogs-region: us-east-1
-        awslogs-stream-prefix: zookeeper
+        awslogs-group: "/ecs/zookeeper"
+        awslogs-region: "eu-north-1"
 
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -34,9 +33,8 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: /ecs/kafka
-        awslogs-region: us-east-1
-        awslogs-stream-prefix: kafka
+        awslogs-group: "/ecs/kafka"
+        awslogs-region: "us-north-1"
 
   app:
     build:
@@ -58,9 +56,8 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: /ecs/app
-        awslogs-region: us-east-1
-        awslogs-stream-prefix: app
+        awslogs-group: "/ecs/app"
+        awslogs-region: "us-north-1"
 
 volumes:
   kafka-data:
