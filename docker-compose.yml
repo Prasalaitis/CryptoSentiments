@@ -12,7 +12,7 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: "zookeeper-logs"
+        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
         awslogs-region: "eu-north-1"
 
   kafka:
@@ -33,7 +33,7 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: "kafka-logs"
+        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
         awslogs-region: "eu-north-1"
 
   app:
@@ -58,7 +58,7 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: "app-logs"
+        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
         awslogs-region: "eu-north-1"
 
 volumes:
