@@ -64,3 +64,24 @@ services:
 
 volumes:
   kafka-data:
+
+  spark:
+    image: bitnami/spark:latest
+    container_name: spark
+    depends_on:
+      - kafka
+    environment:
+      - SPARK_MODE=master
+      - S3_RAW_DATA_PATH=${S3_RAW_DATA_PATH}
+      - CHECKPOINT_LOCATION=${CHECKPOINT_LOCATION}
+      - KAFKA_BROKER=kafka:9092
+    volumes:
+      - ./processing:/opt/spark-apps
+    command: >
+      bin/spark-submit --master local[2] /opt/spark-apps/streaming_processing.py
+    restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
+        awslogs-region: "eu-north-1"

@@ -11,12 +11,13 @@ logging.basicConfig(
 
 # Placeholder sentiment analysis function
 def analyze_sentiment(text: str) -> str:
-    if "good" in text.lower():
-        return "positive"
-    elif "bad" in text.lower():
-        return "negative"
-    else:
-        return "neutral"
+    if text:
+        text = text.lower()
+        if "good" in text:
+            return "positive"
+        elif "bad" in text:
+            return "negative"
+    return "neutral"
 
 # Register the UDF for sentiment analysis
 analyze_sentiment_udf = udf(analyze_sentiment, StringType())
