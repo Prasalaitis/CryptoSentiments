@@ -38,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
   CMD curl --fail http://localhost:8000/healthz || exit 1
 
 # Default command to run the application
-CMD ["python", "reddit_ingestion.py"]
+CMD ["python", "-m", "ingestion.reddit_ingestion"]

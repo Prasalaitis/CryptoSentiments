@@ -51,8 +51,8 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_MAIN_TOPIC=cryptocurrency_events
       - KAFKA_DLQ_TOPIC=dead_letter_queue
-#      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-#      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    env_file:
+      - .env
     ports:
       - "8501:8501"
     restart: always
