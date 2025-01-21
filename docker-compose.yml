@@ -42,13 +42,10 @@ services:
     container_name: spark
     depends_on:
       - kafka
+    env_file:
+      - .env
     environment:
       - SPARK_MODE=master
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_RAW_DATA_PATH=${S3_RAW_DATA_PATH}
-      - CHECKPOINT_LOCATION=${CHECKPOINT_LOCATION}
-      - KAFKA_BROKER=kafka:9092
     volumes:
       - ./processing:/opt/spark-apps
     command: >
@@ -67,13 +64,6 @@ services:
     container_name: reddit-ingestion-app
     depends_on:
       - kafka
-    environment:
-      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
-      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
-      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - KAFKA_MAIN_TOPIC=cryptocurrency_events
-      - KAFKA_DLQ_TOPIC=dead_letter_queue
     env_file:
       - .env
     ports:
