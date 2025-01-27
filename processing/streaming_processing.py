@@ -3,11 +3,13 @@ from pyspark.sql.functions import col, udf, from_json
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType
 import os
 import logging
+import sys
 
 # Configure logging
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 
 # Placeholder sentiment analysis function
 def analyze_sentiment(text: str) -> str:
@@ -19,19 +21,26 @@ def analyze_sentiment(text: str) -> str:
             return "negative"
     return "neutral"
 
+
 # Register the UDF for sentiment analysis
 analyze_sentiment_udf = udf(analyze_sentiment, StringType())
 
 # Global counter to limit writes
-write_counter = 0
 WRITE_LIMIT = 100  # Max 100 writes
+write_counter = 0
 
-def check_write_limit():
+
+def check_write_limit(df, epoch_id):
     global write_counter
-    if write_counter >= WRITE_LIMIT:
-        logging.warning("Write limit reached. Stopping Spark Streaming.")
-        exit(0)  # Stop execution after 100 writes
-    write_counter += 1
+    count = df.count()
+
+    if write_counter + count >= WRITE_LIMIT:
+        logging.warning(f"Write limit reached ({WRITE_LIMIT} records). Stopping Spark Streaming.")
+        sys.exit(0)  # Gracefully stop Spark
+
+    write_counter += count
+    logging.warning(f"Processed {write_counter}/{WRITE_LIMIT} records.")
+
 
 def write_to_snowflake(processed_df):
     # Snowflake connection options
@@ -47,13 +56,14 @@ def write_to_snowflake(processed_df):
 
     logging.warning("Writing processed data to Snowflake...")
 
-    # Write processed data to Snowflake, only unique records
+    # Write processed data to Snowflake
     processed_df.dropDuplicates(["id", "timestamp"]).writeStream \
         .format("net.snowflake.spark.snowflake") \
         .options(**snowflake_options) \
         .option("dbtable", "sentiment_analysis_results") \
         .outputMode("append") \
         .start()
+
 
 def main():
     # Load configurations
@@ -87,16 +97,13 @@ def main():
             .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
             .option("subscribe", kafka_topic) \
             .option("startingOffsets", "latest") \
-            .option("maxOffsetsPerTrigger", "100") \  # NEW LIMIT TO AVOID EXCESSIVE PROCESSING
+            .option("maxOffsetsPerTrigger", "100") \
             .load()
 
         # Deserialize and apply schema
         raw_parsed_df = raw_df.selectExpr("CAST(value AS STRING) as json") \
             .select(from_json(col("json"), schema).alias("data")) \
             .select("data.*")
-
-        # Limit writes
-        raw_parsed_df = raw_parsed_df.withColumn("write_limit", udf(lambda: check_write_limit())())
 
         # Save raw data to S3
         logging.warning("Writing raw data to S3: %s", s3_raw_data_path)
@@ -105,6 +112,7 @@ def main():
             .option("path", s3_raw_data_path) \
             .option("checkpointLocation", os.path.join(checkpoint_location, "raw-data")) \
             .outputMode("append") \
+            .foreachBatch(check_write_limit) \
             .start()
 
         # Process data with sentiment analysis
@@ -135,6 +143,7 @@ def main():
     finally:
         logging.warning("Stopping Spark session...")
         spark.stop()
+
 
 if __name__ == "__main__":
     main()
