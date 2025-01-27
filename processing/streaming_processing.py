@@ -6,7 +6,7 @@ import logging
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # Placeholder sentiment analysis function
@@ -22,6 +22,17 @@ def analyze_sentiment(text: str) -> str:
 # Register the UDF for sentiment analysis
 analyze_sentiment_udf = udf(analyze_sentiment, StringType())
 
+# Global counter to limit writes
+write_counter = 0
+WRITE_LIMIT = 100  # Max 100 writes
+
+def check_write_limit():
+    global write_counter
+    if write_counter >= WRITE_LIMIT:
+        logging.warning("Write limit reached. Stopping Spark Streaming.")
+        exit(0)  # Stop execution after 100 writes
+    write_counter += 1
+
 def write_to_snowflake(processed_df):
     # Snowflake connection options
     snowflake_options = {
@@ -34,10 +45,10 @@ def write_to_snowflake(processed_df):
         "sfPassword": os.getenv("SNOWFLAKE_PASSWORD"),
     }
 
-    logging.info("Writing processed data to Snowflake...")
+    logging.warning("Writing processed data to Snowflake...")
 
-    # Write processed data to Snowflake
-    processed_df.writeStream \
+    # Write processed data to Snowflake, only unique records
+    processed_df.dropDuplicates(["id", "timestamp"]).writeStream \
         .format("net.snowflake.spark.snowflake") \
         .options(**snowflake_options) \
         .option("dbtable", "sentiment_analysis_results") \
@@ -71,11 +82,12 @@ def main():
 
     try:
         # Read raw data from Kafka
-        logging.info("Reading data from Kafka topic: %s", kafka_topic)
+        logging.warning("Reading data from Kafka topic: %s", kafka_topic)
         raw_df = spark.readStream.format("kafka") \
             .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
             .option("subscribe", kafka_topic) \
             .option("startingOffsets", "latest") \
+            .option("maxOffsetsPerTrigger", "100") \  # NEW LIMIT TO AVOID EXCESSIVE PROCESSING
             .load()
 
         # Deserialize and apply schema
@@ -83,8 +95,11 @@ def main():
             .select(from_json(col("json"), schema).alias("data")) \
             .select("data.*")
 
+        # Limit writes
+        raw_parsed_df = raw_parsed_df.withColumn("write_limit", udf(lambda: check_write_limit())())
+
         # Save raw data to S3
-        logging.info("Writing raw data to S3: %s", s3_raw_data_path)
+        logging.warning("Writing raw data to S3: %s", s3_raw_data_path)
         raw_query = raw_parsed_df.writeStream \
             .format("json") \
             .option("path", s3_raw_data_path) \
@@ -98,7 +113,7 @@ def main():
         )
 
         # Write processed data to Kafka
-        logging.info("Writing processed data to Kafka topic: %s", output_topic)
+        logging.warning("Writing processed data to Kafka topic: %s", output_topic)
         processed_query = processed_df.selectExpr("to_json(struct(*)) AS value") \
             .writeStream \
             .format("kafka") \
@@ -118,7 +133,7 @@ def main():
     except Exception as e:
         logging.error("An error occurred: %s", e)
     finally:
-        logging.info("Stopping Spark session...")
+        logging.warning("Stopping Spark session...")
         spark.stop()
 
 if __name__ == "__main__":
