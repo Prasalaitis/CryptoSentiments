@@ -4,56 +4,77 @@ services:
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"
     ports:
       - "2181:2181"
-    restart: always
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    restart: unless-stopped
     logging:
       driver: awslogs
       options:
-        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
+        awslogs-group: "/aws/ec2/crypto-sentiment"
         awslogs-region: "eu-north-1"
+        awslogs-stream: "zookeeper"
 
   kafka:
     image: confluentinc/cp-kafka:latest
     container_name: kafka
     depends_on:
       - zookeeper
+    ports:
+      - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
-    ports:
-      - "9092:9092"
     volumes:
-      - kafka-data:/var/lib/kafka
-    restart: always
+      - kafka-data:/var/lib/kafka/data
+    restart: unless-stopped
     logging:
       driver: awslogs
       options:
-        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
+        awslogs-group: "/aws/ec2/crypto-sentiment"
         awslogs-region: "eu-north-1"
+        awslogs-stream: "kafka"
 
   spark:
-    image: bitnami/spark:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
     container_name: spark
     depends_on:
       - kafka
-    env_file:
-      - .env
     environment:
       - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    env_file:
+      - .env
     volumes:
       - ./processing:/opt/spark-apps
+      - spark-data:/opt/spark/data
     command: >
-      bin/spark-submit --master local[2] /opt/spark-apps/streaming_processing.py
-    restart: always
+      bin/spark-submit 
+      --master local[2] 
+      --driver-memory 1g 
+      --executor-memory 1g 
+      /opt/spark-apps/streaming_processing.py
+    restart: unless-stopped
     logging:
       driver: awslogs
       options:
-        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
+        awslogs-group: "/aws/ec2/crypto-sentiment"
         awslogs-region: "eu-north-1"
+        awslogs-stream: "spark"
 
   app:
     build:
@@ -64,14 +85,22 @@ services:
       - kafka
     env_file:
       - .env
+    environment:
+      - AWS_REGION=eu-north-1
     ports:
       - "8501:8501"
-    restart: always
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
     logging:
       driver: awslogs
       options:
-        awslogs-group:  "/aws/eks/hilarious-crypto-dinosaur/cluster"
+        awslogs-group: "/aws/ec2/crypto-sentiment"
         awslogs-region: "eu-north-1"
+        awslogs-stream: "app"
 
 volumes:
+  zookeeper-data:
+  zookeeper-logs:
   kafka-data:
+  spark-data:

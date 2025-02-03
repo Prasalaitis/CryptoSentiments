@@ -1,0 +1,10 @@
+FROM bitnami/spark:latest
+
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY processing /opt/spark-apps/
+COPY .env /opt/spark-apps/
+
+RUN mkdir -p /opt/spark/data && \
+    chown -R 1001:1001 /opt/spark/data
